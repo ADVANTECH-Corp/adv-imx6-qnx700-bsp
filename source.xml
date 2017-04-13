@@ -1,0 +1,17 @@
+<!-- Unless otherwise specified, values/attributes are free-form strings -->
+    <!-- type is currently either BSP or SourceOnly -->
+<sourcePackage type="BSP" id="bsp-nxp-mx6q-sabresmart">
+    <title>NXP i.MX6x SABRE Platform for Smart Devices</title>
+    <release></release>
+    
+    <license>QDL and Apache II</license>
+    <startup>startup-imx6x-sabresmart</startup>
+    <description>This board support package is for the NXP SABRE Platform for Smart Devices board. This BSP contains prebuilt binaries and buildfiles to boot your board with the QNX Neutrino RTOS. In addition, this BSP provides source code for various drivers that you use can build. For documentation to use this BSP, download the user's guide.</description>
+    <vendor>QNX Software Systems Limited</vendor>
+    <qnxTargetVersion>SDP7.0</qnxTargetVersion>
+        <qnxTargetCPU variant="armle.v7">ARM</qnxTargetCPU>
+    <!-- type is currently only import, will be extended in the future. -->
+    <bsp type="import">
+        <import id="bsp-nxp-mx6q-sabresmart">src/hardware/startup/boards/imx6x/smart-device/build</import>
+    </bsp>
+</sourcePackage>

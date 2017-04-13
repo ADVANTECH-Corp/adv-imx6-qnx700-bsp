@@ -1,0 +1,282 @@
+begin khronos
+
+  begin egl display 1
+    egl-dlls = libGAL.so libEGL_viv.so
+    glesv1-dlls = libGAL.so libEGL_viv.so libVSC.so libGLES_CM_viv.so
+    glesv2-dlls = libGAL.so libEGL_viv.so libVSC.so libGLSLC.so libGLESv2_viv.so
+    vg-dlls = libGAL.so libEGL_viv.so libOpenVG_viv.so
+    cl-dlls = libOpenCL.so
+    gpu-dlls = libGalcore.so
+    blit-dll = vivante
+
+  end egl display
+
+  begin wfd device 1
+   # Choose ONE wfd-dlls line that matches your hardware.
+
+   # 10" Hannstar display on LVDS0
+   # wfd-dlls = libwfdcfg-imx6x-hsd100pxn1.so libimx6xCSCgamma-generic.so libWFDimx6x.so
+
+   # 7" Chimei Innolux 1024x600 @60 display
+   # wfd-dlls = libwfdcfg-imx6x-innolux.so libimx6xCSCgamma-generic.so libWFDimx6x.so
+
+   # 10" Hannstar display
+   # wfd-dlls = libwfdcfg-imx6x-hsd100pxn1.so libimx6xCSCgamma-generic.so libWFDimx6x.so
+
+   # HDMI display
+   # wfd-dlls = libwfdcfg-imx6x-hdmi.so libimx6xCSCgamma-generic.so libWFDimx6x.so
+
+   # Okaya 7" display panel
+   # wfd-dlls = libwfdcfg-imx6x-okaya.so libimx6xCSCgamma-generic.so libWFDimx6x.so
+
+   # Advantech 7" 800x600 display panel
+   # wfd-dlls = libwfdcfg-imx6x-okaya.so libimx6xCSCgamma-generic.so libWFDimx6x.so
+
+   # Advantech KOE 5.7" TX17D01VM2CAC display panel
+   # wfd-dlls = libwfdcfg-imx6x-koe.so libimx6xCSCgamma-generic.so libWFDimx6x.so
+
+   # Advantech IDK 10" display panel
+   # wfd-dlls = libwfdcfg-imx6x-idk.so libimx6xCSCgamma-generic.so libWFDimx6x.so
+
+   # Advantech TGC 12" TX121 display panel
+   # wfd-dlls = libwfdcfg-imx6x-tcg.so libimx6xCSCgamma-generic.so libWFDimx6x.so
+
+   # Advantech AUO 7" display panel
+   wfd-dlls = libwfdcfg-imx6x-auo.so libimx6xCSCgamma-generic.so libWFDimx6x.so
+
+# Display output to WFD port mapping.
+# Each display output can be connected to a WFD port.
+# Multiple displays can connect to a single WFD port if they
+# are compatible (HDMI and LVDS are OK, Okaya 7" panel is not).
+# Use port 0 to ignore an output (or comment out the line).
+
+# WFD port 1 is IPU1 DI0.
+# WFD port 2 is IPU2 DI0 (not available on DualLite or Solo).
+
+# If there are no references to a WFD port then the IPU will
+# not be used.
+
+# This example connects WFD port 1 to HDMI, LVDS0, and
+# DISP0 (parallel RGB pads).  Compatible displays required.
+# WFD port 2 is connected to LVDS1 and DISP1 (Dual and Quad only).
+# (TODO switch back to example after MIPI-DSI testing)
+
+# HDMI may be connected to WFD port 1, 2, or 0 (disabled).
+  wfd-port-hdmi = 0
+# LVDS0 may be connected to WFD port 1, 2, or 0 (disabled).
+  wfd-port-lvds0 = 1
+# LVDS1 may be connected to WFD port 1, 2, split, or 0 (disabled).
+  wfd-port-lvds1 = 1
+# MIPI-DSI may be connected to WFD port 1, 2 or 0 (disabled)
+  wfd-port-mipi-dsi = 0
+# DISP0 may be connected to WFD port 1 or 0 (disabled)
+  wfd-port-parallel0 = 0
+# DISP1 may be connected to WFD port 2 or 0 (disabled)
+  wfd-port-parallel1 = 0
+
+# LVDS split mode using IPU1:
+#  wfd-port-lvds0 = 1
+#  wfd-port-lvds1 = split
+
+# LVDS join-mode
+# special mode to jointly use LVDS0 and LVDS1 as one display-panel
+#  wfd-port-join-mode = lvds_true
+#  if wfd-port-lvds0 = 1; wfd-port-lvds1 = 2
+#   LVDS0 ouput left half image where LVDS1 output right half part
+#  if wfd-port-lvds0 = 2, wfd-port-lvds1 = 1;
+#   LVDS0 ouput right half image where LVDS1 output left half part
+
+# This option is DEPRECATED.  Use the wfd-port mappings above instead.
+# ipu-index = 1 is the default.
+# ipu-index = 2 will *SWAP* the IPUs (WFD port 2 becomes IPU1).
+# This option is ignored on DualLite and Solo because they have no IPU2.
+   # ipu-index = 2
+
+# If you use only one pipeline, you can optimize memory bandwidth with
+# the dynamic-pipelines option, which disables unused pipelines.
+# If you use two pipelines, and especially if you frequently create
+# and destroy autonomous windows (e.g. with the media player, or any window
+# with SCREEN_USAGE_OVERLAY), dynamic pipelines will create undesirable
+# video artifacts whenever the second pipeline is enabled.
+# By default, dynamic pipelines are disabled (0).
+  dynamic-pipelines = 1
+
+# Disable operations that require the IC.
+# This is a workaround for applications that attempt to use operations
+# that are implemented by the IC but cannot cope with the IC's restrictions.
+# When the IC is disabled, WFD will refuse to support scaling, rotation,
+# YUV formats, or BCHS controls, forcing applications to fall back to
+# GPU implementations of these functions.
+  # disable-ic = 1
+
+# The 'ldb-clock-sel' parameter is deprecated and no longer has any effect.
+# The driver now reads the current mux register value.
+
+# Abort on vsync timeouts (used to detect PLL failure)
+# Most users should never enable this.
+   # vsync-failure-limit = 4
+
+# enable monitoring GPU h/w (2D_core/3D_core) status and set report interval
+# the following information is reported at given interval (in seconds)
+# irq count
+# message count (at kernel side)
+# h/w status registers
+ # gpu-heartbeat-interval = 10
+
+# GPU driver contiguous memory pool sizes in MB
+# Large values have better performance but longer startup time.
+# Small values have a variety of performance impacts at run time.
+   # gpu-contiguousMB   = 238   # maximum (254 - internalPoolMB)
+   gpu-contiguousMB   = 64      # recommended
+   # gpu-contiguousMB   = 2     # minimum
+
+# Other memory pools (no need to change these)
+   gpu-internalPoolMB = 16
+   gpu-sharedPoolMB   = 2
+
+# Use only the contiguous memory pool (for debugging).
+# true means no virtual memory allocations.
+# false means that additional virtual memory will be allocated when
+# the contiguous pool is full.
+  gpu-contiguousOnly = false
+
+# Abort when GPU contiguous memory exhausted instead of allocating
+# additional virtual memory (for debugging).  Default is off.
+# DO NOT ENABLE THIS.
+  # gpu-contiguousAbort = true
+
+# Report GPU contiguous memory usage statistics (current and minimum
+# free space) to slog every N seconds.  A value of 0 disables this feature.
+# Also logs when a new minimum level of free space is reached.  Default 0.
+  # gpu-slogUsageInterval = 10
+
+# GPU power management:  If enabled, the GPU will control GPU power
+# at the PMU according to GPU load.  If disabled, the driver will
+# assume GPU power is already on, and will fail if it is not (e.g.
+# because u-boot disabled GPU at startup).  Default false.
+   gpu-pm-enable = true
+
+# Limit power management to "power on" only.  The GPU driver will
+# complete the GPU power-on sequence, but will not power off.
+# If the VPU is in use this option must be enabled because the
+# GPU and VPU share a power supply.  Default false.
+   gpu-pm-force-power-on = true
+
+# GPU power management:  If enabled (1), the GPU will control GPU power
+# states internal to the GPU core according to GPU load.  Default 0.
+# Cannot be enabled when using GPU profiling.
+   gpu-powerManagement = 0
+
+# WFD video buffer preallocation:  If enabled, WFD will preallocate
+# video buffers at startup to avoid allocation failures due to
+# physical memory fragmentation.  Eligible allocation requests will
+# be satisfied from this pool, which is never freed while the driver
+# is running.  The number of buffers to allocate and their size in bytes
+# can be specified here.  See also wfd-prealloc-image-min-size.
+  # wfd-prealloc-count = 25
+  # wfd-prealloc-size = 3664832
+
+# WFD video buffer preallocation minimum size:  If non-zero, preallocated
+# buffers will be used for any buffer exceeding this size.  If min-size
+# is zero or not specified, preallocated buffers will be used for all
+# USAGE_VIDEO buffers if YUV420 and NV12 formats, and no others.
+  # wfd-prealloc-min-size = 3153921
+
+
+# Options to control what debug build of driver writes to slog
+   debug-alloc = 0      # Logs memory allocations
+   debug-buffer = 0     # Logs first 8 words of each buffer
+   debug-cscgamma = 0   # Logs CSC/Gamma correction activity
+   debug-idmac = 0      # Logs IDMAC parameters
+   debug-ipu = 0        # Logs IPU activity (except pipeline and port)
+   debug-isr = 0        # Logs IRQ statistics
+   debug-lvds = 0       # Logs LVDS and LDB setup
+   debug-mipi = 0       # Logs LVDS and LDB setup
+   debug-pipeline = 0   # Logs pipeline activity
+   debug-port = 0       # Logs port activity
+   debug-register = 0   # Logs register activity to tracelog (not slog!)
+   debug-resize = 0     # Logs resizer (IPU IC PP) activity
+   debug-trace = 0      # Logs entry into each WFD function
+   debug-misc = 0       # Logs everything else
+
+  end wfd device
+
+end khronos
+
+begin winmgr
+  begin globals
+    input = mouse, keyboard
+    blit-config = vivante
+    blits-logsize = 4096
+    input-logsize = 8192
+    requests-logsize = 65536
+    alloc-config = imx6xbuf
+  end globals
+
+  begin display internal
+    cursor = on
+
+    # These are modes known to the 'hdmi' modelib.
+    # If you don't specify a mode here,
+    # or the mode you specify here is not in the modelib,
+    # the first mode returned by modelib is used.
+    # video-mode = 800 x 480 @ 76
+    # video-mode = 1920 x 1200 @ 60
+    # video-mode = 1920 x 1080 @ 60
+    # video-mode = 1920 x 720 @ 60
+    # video-mode = 1280 x 1024 @ 75
+    # video-mode = 1280 x 1024 @ 60
+    # video-mode = 1280 x 800 @ 50
+    # video-mode = 1280 x 720 @ 60
+    # video-mode = 1280 x 480 @ 60
+    # video-mode = 1152 x 864 @ 75
+    # video-mode = 1024 x 768 @ 75
+    # video-mode = 1024 x 768 @ 60
+    # video-mode = 800 x 600 @ 75
+    # video-mode = 800 x 600 @ 60
+    # video-mode = 640 x 480 @ 75
+    # video-mode = 720 x 400 @ 70
+
+    # These are modes known to the 'hsd100pxn1' modelib.
+    # They are all the same except for the pixel clock.
+    # FIXME:  Some boards seem to be unstable at 65 MHz pixel clock,
+    # FIXME:  so we use a slower clock by default.
+    # video-mode = 1024 x 768 @ 40
+    # video-mode = 1024 x 768 @ 60
+    # video-mode = 1024 x 768 @ 30
+    # video-mode = 1024 x 768 @ 120
+    # video-mode = 1024 x 768 @ 20
+    # video-mode = 1024 x 768 @ 180
+    # video-mode = 1024 x 768 @ 90
+    # video-mode = 1024 x 768 @ 80
+    # video-mode = 1024 x 768 @ 45
+
+    # Innolux display only
+    # video-mode = 1024 x 600 @ 60
+
+    # KOE 5.7" TX17D01VM2CAC display only
+    # video-mode = 640 x 480 @ 60
+
+  end display
+
+  # For display #1
+  begin class framebuffer
+    display = internal
+    pipeline = 2
+    format = rgba8888
+    # Use these instead for framebuffer on background:
+    # pipeline = 1
+    # format = rgbx8888
+    usage = vivante
+  end class
+
+#begin mtouch
+# Choose ONE of the different mtouch drivers available
+#    driver =  egalax
+#    driver =  focaltech
+#     driver =  devi
+#     options = height=480,width=640
+#     display = 1
+#end mtouch
+
+end winmgr

@@ -1,0 +1,24 @@
+IMX I2C manager
+
+%C [options]
+
+Options:
+-a addr     Own address (default: 0)
+-c clock    Input clock (default: 66500000)
+-h prio     Priority of event associated to I2C interrupt handler (default: 21)
+-i intr     I2C port interrupt number
+-I if       I2C number, specifies default reg. addr. and intr. (1|2|3, def: 1)
+-p addr     I2C port register physical address
+-s slave    Slave address (default: 0x38)
+-t factor   Slave response timeout factor when waiting for a slave device to respond.
+            Represents what factor to multiply the minimum theoretical transaction
+            time by before timing out (default: 20 times)
+-v          Verbose
+-y ns       Bus busy timeout when initiating a transaction (default: 500000 ns)
+
+Generic options:
+--b bus_speed    Bus speed
+--m max_msg_len  Length to set resmgr receive buffer (default: 128 bytes)
+--n nparts       Minimum number of iov_t's in resmgr context (default: 2)
+--u unit         Unit number. Number to append to device name prefix /dev/i2c
+                 (default: 0)

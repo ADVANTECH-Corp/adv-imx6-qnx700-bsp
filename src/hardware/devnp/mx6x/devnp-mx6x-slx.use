@@ -1,0 +1,39 @@
+%C Driver for Freescale i.MX6-SoloX ENET
+
+Syntax:
+  io-pkt-v6-hc -d mx6x-slx mac=XXXXXXXXXXXX [option[,option ...]] ...
+
+Options (to override autodetected defaults):
+  duplex=0|1          Half (0) or full (1) duplex mode.  Default auto-detect.
+                      Also can use ifconfig -m and ifconfig enX media to set.
+  mac=XXXXXXXXXXXX    MAC address of the controller.
+  receive=X           Set number of receive descriptors. Default 256.
+  speed=10|100	      Media data rate.  Default auto-detect.  Also can
+                      use ifconfig -m and ifconfig enX media to set.
+  transmit=X          Set number of transmit descriptors. Default 256.
+  verbose=X           Bigger X value yields increased diagnostic output.
+  freq=X              Ethernet timestamp clock frequency in MHz. If not
+                      specified attempt to autodetect.
+  brmast=0|1          Select master (1) or slave (0) role when using a
+                      BroadR_Reach phy for board-to-board connection.
+  mii                 Use the MII interface between the MAC and the PHY.
+                      Default is RGMII.
+  rmii                Use the RMII interface between the MAC and the PHY.
+                      Default is RGMII.
+  tx_delay=X          Transmit interrupt coalescing threshold (default: 240)
+  tx_frame=X          Transmit interrupt coalescing threshold (default: 255)
+  rx_delay=X          Receive interrupt coalescing threshold (default: 240)
+  rx_frame=X          Receive interrupt coalescing threshold (default: 120)
+
+If the syspage contains information about multiple ENET devices, the driver
+will be initialized for all of them. The above options apply to all ENET
+devices handled by this driver.
+
+To disable the interrupt coalescing featue, tx_delay, tx_frame, rx_delay,
+and rx_frame must all be set to zero.
+
+Examples:
+  # Start io-pkt using the mx6-slx driver:
+  io-pkt-v6-hc -d mx6x-slx mac=00123456789a
+  ifconfig fec0 192.0.2.1
+

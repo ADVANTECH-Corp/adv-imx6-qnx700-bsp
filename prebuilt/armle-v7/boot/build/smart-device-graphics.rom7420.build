@@ -1,0 +1,998 @@
+###########################################################################################
+#
+# Neutrino 7.0 on the NXP i.MX6Q Smart-Device Board, based on ARM Cortex A9-MPCore Platform
+#
+###########################################################################################
+#
+# On-board devices:
+# ----------------
+# device:   i.MX6Q UARTs 1 (debug) and 3 (GPS)
+#       devc-sermx1 -u 1 -e -F -S -c80000000 0x02020000,58
+#       devc-sermx1 -u 3 -s -E -F -c80000000 0x021EC000,60
+#
+# device:   i.MX6Q I2C 1,2,3
+#       i2c-imx -p 0x021A0000 -i68 -c66000000 --u 1
+#       i2c-imx -p 0x021A4000 -i69 -c66000000 --u 2
+#       i2c-imx -p 0x021A8000 -i70 -c66000000 --u 3
+#
+## device:   i.MX6Q SPI 1,2,3,4,5
+#       spi-master -u1 -d mx51ecspi base=0x02008000,irq=63,loopback=1
+#       spi-master -u2 -d mx51ecspi base=0x0200C000,irq=64,loopback=1
+#       spi-master -u3 -d mx51ecspi base=0x02010000,irq=65,loopback=1
+#       spi-master -u4 -d mx51ecspi base=0x02014000,irq=66,loopback=1
+#       spi-master -u5 -d mx51ecspi base=0x02018000,irq=67,loopback=1
+#
+# device:   i.MX6Q USDHC controller 2,3,4(eMMC)
+#      devb-sdmmc-mx6 cam pnp,verbose blk rw,cache=2M sdio
+#
+# device: i.MX6Q SATA Driver
+#     devb-ahci ahci ioport=0x02200000,irq=71
+#
+# device:   i.MX6Q USB OTG (host mode)
+#       io-usb-otg -d hcd-ehci-mx28 ioport=0x02184300,irq=72,phy=0x020ca000,no_stream,verbose=5,ioport=0x02184100,irq=75,phy=0x020c9000,no_stream,verbose=5
+#
+# device:   i.MX6Q USB OTG (device mode)
+#       io-usb-otg -d dcd-usbumass-mx6sabrelite-ci ioport=0x02184000,irq=75 -n /dev/io-usb-dcd/io-usb
+#
+# device:   i.MX6Q SSI Audio Controller
+#       io-audio -d mx-mx6_wm8962 clk_mode=i2s_master,sys_clk=12880000,mixer=mclk=16500000
+#
+# device:  4MB M25P32-VMW6TG SPI Flash Chip
+#     devf-norspi-mx6_sabresmart-ecspi
+#
+# device:   PCIe
+#     install PCI package
+#
+# device:   Ethernet
+#      io-pkt-v6-hc -dmx6x
+#
+# device:   watchdog Timer
+#      wdtkick
+#
+# device:   SRTC
+#       rtc hw  or  rtc -s hw
+#
+############################################################################
+[image=0x10800000]
+[virtual=armle-v7,raw +compress] .bootstrap = {
+	# Startup parameters:
+	# '-b' -> enable BT (conflicts with SPI NOR and PCIe)
+	# '-m' -> enable d-cache/MMU (improves boot time)
+	# '-n' -> enable nor SPI (not populated by default and conflicts with BT & WiFi)
+	# '-t' -> enable TrustZone Address Space Controller (TZASC) memory allocation for Graphics
+	# '-W' -> enable watchdog
+	#startup-imx6x-smart-device -W -m
+
+	#rom7420
+	startup-imx6x-smart-device.rom7420 -W -m -v -n
+	PATH=/proc/boot:/bin:/usr/bin:/opt/bin/sbin:/usr/sbin LD_LIBRARY_PATH=/proc/boot:/lib:/usr/lib:/lib/dll:/lib/dll/pci:/opt/lib procnto-smp-instr
+}
+[+script] .script = {
+    # Initialise the console
+    procmgr_symlink ../../proc/boot/libc.so /usr/lib/ldqnx.so.2
+    TZ=EDT5EST
+    PCI_HW_MODULE=/lib/dll/pci/pci_hw-iMX6-smart.so
+    PCI_BKWD_COMPAT_MODULE=/lib/dll/pci/pci_bkwd_compat.so
+    PCI_SLOG_MODULE=/lib/dll/pci/pci_slog2.so
+    PCI_DEBUG_MODULE=/lib/dll/pci/pci_debug2.so
+    PCI_BASE_VERBOSITY=0
+
+    display_msg Welcome to QNX Neutrino 7.0 on the ROM-7420 (ARM Cortex-A9 MPCore)
+
+    # Ensure that all serial debug and telnet ksh sessions have environment variables set
+    ENV=/etc/profile
+
+    # Start some common servers
+    pipe &
+    slogger2
+
+    #######################################################################
+    ## WatchDog utility
+    ## If startup is given '-W' parameter then the 'wdtkick' utility MUST
+    ## be uncommented below.
+    #######################################################################
+    display_msg Starting watchdog...
+    wdtkick
+
+    #######################################################################
+    ## Random service
+    #######################################################################
+    display_msg "Starting random service ..."
+    random -t
+    waitfor /dev/random 5
+
+    #######################################################################
+    ## UART drivers
+    ## UART 1 (started above) is connected to the USB->RS232 bridge
+    ## UART 2 is unused
+    ## UART 3 is connected to the GPS
+    ## Note, UART 3 is started in RAW mode with no s/w flow control.
+    #######################################################################
+    #UART1 (/dev/ser1)
+    devc-sermx1 -e -F -S -c80000000 0x02020000,58
+    waitfor /dev/ser1 4
+    reopen /dev/ser1
+    display_msg " "
+
+    display_msg Starting UART2 driver (/dev/ser2)...
+    devc-sermx1 -u 2 -s -E -F -c80000000 0x021E8000,59
+    waitfor /dev/ser2 4
+
+    display_msg Starting UART3 driver (/dev/ser3)...
+    devc-sermx1 -u 3 -s -E -F -c80000000 0x021EC000,60
+    waitfor /dev/ser3 4
+
+    display_msg Starting UART4 driver for mircotouch (/dev/ser4)...
+    devc-sermx1 -u 4 -s -E -F -c80000000 0x021F0000,61
+    waitfor /dev/ser4 4
+
+    display_msg Starting UART5 driver (/dev/ser5)...
+    devc-sermx1 -u 5 -s -E -F -c80000000 0x021F4000,62
+    waitfor /dev/ser5 4
+
+    #######################################################################
+    ## I2C driver
+    #######################################################################
+    display_msg Starting I2C1,2,3 driver (/dev/i2c1,2,3)...
+    i2c-imx -p 0x021A0000 -i68 -c66000000 --u 1
+    i2c-imx -p 0x021A4000 -i69 -c66000000 --u 2
+    i2c-imx -p 0x021A8000 -i70 -c66000000 --u 3
+
+    #######################################################################
+    ## SD memory card driver
+    ######################################################################
+
+    display_msg Starting Emmc Nand Flash driver
+    devb-sdmmc-mx6 cam quiet blk rw,cache=2M sdio addr=0x0219c000,irq=57,bs=nocd disk name=emmc
+    waitfor /dev/emmc0 3
+
+    display_msg Starting SD memory card (Boot-uSD) driver...
+    devb-sdmmc-mx6 cam pnp,verbose blk rw,cache=2M sdio addr=0x02194000,irq=55,bs=cd_base=0x020a0000:cd_pin=2:wp_base=0x020a0000:wp_pin=3:cd_irq=194 disk name=sd1
+    #waitfor /dev/sd10 3
+
+    #######################################################################
+    ## SDIO WiFi - requires external WiFi/BT module such as the Texas Instruments WL18xxCOM82SDMMC module
+    ## WiFi module uses SDIO 2
+    ## WiFi driver conflicts with SPI NOR driver!
+    ## Note that HW mods are required to support WiFi!
+    #######################################################################
+    #mount -T io-pkt -o sdio=2,gpio=103,irq_gpio=102 devnp-ti18xx_imx6x.so
+
+    #######################################################################
+    ## BT - requires external WiFi/BT module such as the Texas Instruments WL18xxCOM82SDMMC module
+    ## BT module uses UART5. BT Module conflicts with SPI NOR and PCIe and requires startup
+    ## parameter!
+    ## Note that HW mods are required to support BT!
+    #######################################################################
+    #devc-sermx1_hci-mx6x -vv -d 33 -E -f -g 0x209C000,2 -c 80000000 0x021f4000,62
+
+    #######################################################################
+    ## SST 25VF016B SPI Flash Chip
+    ## 4MB M25P32-VMW6TG SPI Flash Chip
+    ##
+    ## Note also that the SPI NOR flash is not populated on all variants of
+    ## the Smart Device board; MCIMX6Q-SDP do contain SPI-NOR flash,
+    ## but MCIMX6Q-SDB and MCIMX6QP-SDB does not.
+    ## To use this driver, ensure the following conditions:
+    ##   - spi-master resource manager must NOT be running
+    ##   - the '-n' option must be used in the startup command line
+    #######################################################################
+    display_msg Starting Micron N25Q032A SPI Flash driver...
+    devf-norspi-mx6_sabresmart-ecspi.rom7420
+
+    #######################################################################
+    ## PCI Server
+    ##
+    ## Note that there is a known problem with PCI on versions of this board
+    ## which contain the QuadPlus SoC. An updated startup and/or PCI HW module
+    ## will be provided when the issue is resolved
+    #######################################################################
+    #display_msg Starting PCI Server...
+    #pci-server -c &
+
+    #######################################################################
+    ## SATA driver (must be started after PCI Server)
+    #######################################################################
+    display_msg Starting SATA driver...
+    devb-ahci ahci ioport=0x02200000,irq=71
+
+    #######################################################################
+    ## ECSPI driver
+    ## The i.MX6Q Sabre-Lite has one directly accessible SPI based component - a SPI NOR Flash chip.
+    ## Since the SPI NOR driver does not use the QNX SPI framework, there is no need to launch spi-master
+    ## at all for this board.  That said the commands below provide examples of how to launch ECSPI drivers.
+    ## Note that the parameters to spi-master will need to be adjusted depending on the hardware.
+    #######################################################################
+
+    # Starting Enhanced SPI driver ECSPI1 (/dev/spi1)
+    # spi-master -u1 -d mx51ecspi base=0x02008000,irq=63
+
+    # Starting Enhanced SPI driver ECSPI2 (/dev/spi2)
+    # spi-master -u2 -d mx51ecspi base=0x0200C000,irq=64
+
+    # Starting Enhanced SPI driver ECSPI3 (/dev/spi3)
+    # spi-master -u3 -d mx51ecspi base=0x02010000,irq=65
+
+    # Starting Enhanced SPI driver ECSPI4 (/dev/spi4)
+    # spi-master -u4 -d mx51ecspi base=0x02014000,irq=66
+
+    # Starting Enhanced SPI driver ECSPI5 (/dev/spi5)
+    # spi-master -u5 -d mx51ecspi base=0x02018000,irq=67
+
+    #######################################################################
+    ## USB Host 1 OTG controllers
+    #######################################################################
+    display_msg Starting USB host 1 OTG driver (host mode)
+    #io-usb-otg -d hcd-ehci-mx28 ioport=0x02184100,irq=75,phy=0x020c9000,no_stream,verbose=5,ioport=0x02184300,irq=72,phy=0x020ca000,no_stream,verbose=5
+    io-usb-otg -c -d hcd-ehci-mx28 ioport=0x02184300,irq=72,phy=0x020ca000,no_stream,verbose=5
+    waitfor /dev/usb/io-usb-otg 4
+
+    #######################################################################
+    ## USB OTG port (operating in device mode)...
+    #######################################################################
+
+    ##### Example of Mass Storage device #####
+    # Step 1 - Create a ram disk
+    #display_msg Step 1 - Create a ram disk for USB OTG port
+    #devb-ram ram capacity=16384,nodinit,cache=512k disk name=hd@10
+    #waitfor /dev/hd10
+    #fdisk /dev/hd10 add -t 6
+    #mount -e /dev/hd10
+    #waitfor /dev/hd10t6
+    #mkdosfs /dev/hd10t6
+
+    # Step 2 - Start device stack
+    #display_msg Step 2 - Start device stack for USB OTG port
+    #io-usb-otg -d dcd-usbumass-mx6sabrelite-ci ioport=0x02184000,irq=75 -n /dev/io-usb-dcd/io-usb
+    #waitfor /dev/io-usb-dcd/io-usb 4
+    #waitfor /dev/io-usb-dcd/devu-usbumass-omap543x-dwcotg3.so 4
+    #waitfor /dev/io-usb-dcd/devu-usbumass-mx6sabrelite-ci.so
+
+    # Step 3 - Start Mass Storage function driver and enable USB soft connect
+    #display_msg Step 3 - Start Mass Storage function driver and enable USB soft connectfor USB OTG port
+    #devu-umass_client-block -l lun=0,devno=1,iface=0,fname=/dev/hd10
+    #ulink_ctrl -l 1
+
+    ##### Example of CDC-ACM (serial) device #####
+
+    # Step 1 - Start USB device stack
+    #io-usb-otg -d dcd-usbser-mx6sabrelite-ci ioport=0x02184000,irq=75 -n /dev/io-usb-dcd/io-usb
+    #waitfor /dev/io-usb-dcd/io-usb 4
+    #waitfor /dev/io-usb-dcd/devu-usbser-mx6sabrelite-ci.so 4
+
+    # Step 2 - Start USB CDC-ACM function driver and enable USB soft connect
+    #devc-serusb_dcd -e -v -F -s -d iface_list=0,unit=1
+    #waitfor /dev/serusb1
+    #ulink_ctrl -l 1
+
+    #######################################################################
+    ## Networking
+    #######################################################################
+    display_msg Starting Networking
+    io-pkt-v6-hc -dmx6x
+    if_up -p fec0
+    ifconfig fec0 up
+    dhclient -nw fec0
+
+    #######################################################################
+    ## REMOTE_DEBUG (gdb or Momentics)
+    ##  - refer to the help documentation for the gdb, qconn and the IDE
+    ##    for more information on remote debugging
+    ##  - the commands shown require that NETWORK is enabled too
+    #######################################################################
+    devc-pty
+    waitfor /dev/ptyp0 4
+    waitfor /dev/socket 4
+    PATH=$PATH:/usr/bin qconn port=8000
+    inetd &
+
+    #######################################################################
+    ## AUDIO driver
+    #######################################################################
+    #io-audio -d mx-mx6_wm8962 clk_mode=i2s_master,sys_clk=12880000,mixer=mclk=16500000
+    #rom5420 uses i2c2
+    #io-audio -v -d mx-mx6q-sabrelite sys_clk=1288000,mixer=i2cdev=2:mclk=16500000
+    #rsb4410 & rom7420 uses i2c1
+    io-audio -v -d mx-mx6q-sabrelite.rom7420 sys_clk=1288000,mixer=i2cdev=1:mclk=16500000
+    waitfor /dev/snd 4
+
+#    PATH=$PATH:/bin:/usr/bin:/sbin:/usr/sbin:/proc/boot:/opt/qt5/lib:/lib:/usr/lib/
+#    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib:/usr/lib:/lib/dll:/lib/dll/pci:/proc/boot:/opt/qt5/lib:/lib/dll/mmedia/:/usr/Inc/lib/
+
+    #######################################################################
+    ## RTC
+    #######################################################################
+    display_msg Starting RTC utility...
+    rtc hw
+
+    #######################################################################
+    ##  Input services
+    #######################################################################
+    display_msg "Starting Input services..."
+    io-hid -d usb /dev/io-usb/io-usb &
+
+    #######################################################################
+    ## Graphics
+    #######################################################################
+    #display_msg Starting screen
+    ./scripts/screen.sh
+
+    #######################################################################
+    ##  Touch Screen
+    #######################################################################
+    mtouch &
+
+    #weilun@adv - begin
+    #######################################################################
+    ## Driver for USB Mass Storage interface
+    #######################################################################
+    display_msg Launching devb-umass...
+    devb-umass cam pnp &
+    #weilun@adv - end
+
+
+    # Start the main shell
+    [+session] ksh &
+}
+
+# Redirect console messages
+[type=link] /bin/sh=/proc/boot/ksh
+
+[type=link] /dev/console=/dev/ser1
+[type=link] /tmp=/dev/shmem
+[type=link] /var/log=/tmp
+[type=link] /usr/tmp=/tmp
+
+# Programs require the runtime linker (ldqnx.so) to be at a fixed location
+
+# Shared libraries
+libc.so
+libm.so
+
+###########################################################################
+## C++ lib required for GPU
+###########################################################################
+libc++.so
+
+###########################################################################
+## USB HOST driver
+###########################################################################
+#io-usb-otg host lib
+devu-hcd-ehci-mx28.so
+
+libusbdi.so
+devh-usb.so
+libhiddi.so
+
+###########################################################################
+## USB Device Controller drivers
+###########################################################################
+#io-usb-otg device libs
+devu-dcd-usbumass-mx6sabrelite-ci.so
+devu-dcd-usbser-mx6sabrelite-ci.so
+devu-dcd-usbncm-mx6sabrelite-ci.so
+
+libusbdci.so
+
+###########################################################################
+## USB NCM Function driver
+###########################################################################
+devnp-usbdnet.so
+
+###########################################################################
+## BLOCK driver
+## substitute cam-xxx.so and fs-xxx.so with the cam drivers and filesystems
+## required
+###########################################################################
+libcam.so
+io-blk.so
+cam-disk.so
+cam-cdrom.so
+fs-qnx6.so
+fs-dos.so
+fs-udf.so
+fdisk
+mkdosfs
+
+###########################################################################
+## NETWORK driver
+###########################################################################
+devnp-mx6x.so
+libsocket.so
+# support asix based USB to Ethernet dongles
+devnp-asix.so
+libz.so
+libssl.so
+libcrypto.so
+libnbutil.so
+
+###########################################################################
+## ECSPI
+###########################################################################
+spi-mx51ecspi.so
+
+###########################################################################
+## AUDIO
+###########################################################################
+#deva-ctrl-mx-mx6_wm8962.so
+deva-ctrl-mx-mx6q-sabrelite.rom7420.so
+deva-util-restore.so
+libasound.so
+
+###########################################################################
+## SDMA
+###########################################################################
+libdma-sdma-imx6x.so
+
+###########################################################################
+## uncomment for Image Loading
+###########################################################################
+# /lib/dll/img_codec_bmp.so=img_codec_bmp.so
+# /lib/dll/img_codec_gif.so=img_codec_gif.so
+# /lib/dll/img_codec_jpg.so=img_codec_jpg.so
+# /lib/dll/img_codec_pcx.so=img_codec_pcx.so
+# /lib/dll/img_codec_png.so=img_codec_png.so
+# /lib/dll/img_codec_sgi.so=img_codec_sgi.so
+# /lib/dll/img_codec_tga.so=img_codec_tga.so
+# /lib/dll/img_codec_tif.so=img_codec_tif.so
+# /lib/dll/img_codec_wbmp.so=img_codec_wbmp.so
+# libgif.so.5
+# libjpeg.so.4
+# libpng16.so.0
+# libtiff.so.5
+# libz.so.2
+# liblzma.so.5
+# /lib/libimg.so=libimg.so
+# /usr/lib/libpng.so=libpng.so
+
+
+###########################################################################
+## Font loading
+###########################################################################
+# libFF-T2K.so.2
+
+###########################################################################
+##Board specific Graphics support - screen
+###########################################################################
+[-followlink search=${QNX_TARGET}/${PROCESSOR}] /usr/lib/graphics/iMX6X=usr/lib/graphics/iMX6X
+[-followlink search=${QNX_TARGET}/${PROCESSOR}] /usr/lib/graphics/iMX6DQP=usr/lib/graphics/iMX6DQP
+[-followlink search=${QNX_TARGET}/${PROCESSOR}] /usr/lib/graphics/iMX6X-debug=usr/lib/graphics/iMX6X-debug
+[-followlink search=${QNX_TARGET}/${PROCESSOR}] /usr/lib/graphics/iMX6DQP-debug=usr/lib/graphics/iMX6DQP-debug
+
+libgestures.so.1
+libscrmem.so
+libmemobj.so
+libinputevents.so.1
+libkalman.so.1
+libmtouch-calib.so.1
+libmtouch-egalax.so
+libmtouch-hid.so
+
+libwfdcfg-sample.so
+screen-debug.so
+screen-gles1.so
+screen-gles2.so
+screen-sw.so
+screen-vivante.so
+screen-imx6xbuf.so
+
+libcapture.so
+libcapture-board-imx6x-no-decoder.so.1
+libcapture-board-imx6x-sabreSMART.so
+libcapture-camera-ov5640.so
+libcapture-soc-imx6x.so
+[type=link] libcapture.so.1=libcapture-board-imx6x-sabreSMART.so
+libcapture-usb-uvc.so
+libEGL.so.1
+libGLESv1_CL.so.1
+libGLESv1_CM.so.1
+libGLESv2.so.1
+libOpenVG.so.1
+libOpenVGU.so.1
+libscreen.so.1
+libswblit.so.1
+libWFD.so.1
+
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libwfdcfg-imx6x-auo.so=libwfdcfg-imx6x-auo.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/graphics.conf.rom7420.lvds=graphics.conf.rom7420.lvds
+[type=link] /usr/lib/graphics/iMX6DQP/libwfdcfg-imx6x-auo.so=/usr/lib/graphics/iMX6X/libwfdcfg-imx6x-auo.so
+[type=link] /usr/lib/graphics/iMX6DQP/graphics.conf=/usr/lib/graphics/iMX6X/graphics.conf.rom7420.lvds
+[type=link] /usr/lib/graphics/iMX6X/graphics.conf=/usr/lib/graphics/iMX6X/graphics.conf.rom7420.lvds
+
+###########################################################################
+## PPS
+###########################################################################
+libpps.so.1
+
+###########################################################################
+## PCIe server Support
+###########################################################################
+libpci.so
+[-followlink search=${QNX_TARGET}/${PROCESSOR}] /lib/dll/pci=lib/dll/pci
+
+###########################################################################
+## Tracelog
+###########################################################################
+libtracelog.so.1
+libslog2.so
+libslog2parse.so
+libslog2shim.so
+
+###########################################################################
+## For ncurses2 support
+###########################################################################
+libpanelw.so.1
+libncursesw.so.1
+
+###########################################################################
+## Graphics base libraries
+###########################################################################
+/lib/dll/screen-stdbuf.so=screen-stdbuf.so
+/usr/lib/libCL.so=libCL.so
+
+###########################################################################
+## Font libraries
+###########################################################################
+/usr/lib/libfontconfig.so=libfontconfig.so
+/usr/lib/libfreetype.so=libfreetype.so
+
+###########################################################################
+## Input libraries
+###########################################################################
+/lib/libmtouch-devi.so=libmtouch-devi.so
+/lib/libmtouch-fake.so=libmtouch-fake.so
+/lib/libmtouch-inject.so=libmtouch-inject.so
+
+###########################################################################
+## Video Capture libraries
+###########################################################################
+/usr/lib/libcapture-simulated.so=libcapture-simulated.so
+/usr/lib/libcapture-decoder-tvp5158.so=libcapture-decoder-tvp5158.so
+
+# Executables
+[data=c]
+devc-sermx1
+devc-sermx1_hci-mx6x
+
+###########################################################################
+## uncomment for NETWORK driver
+###########################################################################
+io-pkt-v6-hc
+nicinfo
+ping
+ftp
+fs-nfs3
+fs-cifs
+dhcpd
+if_up
+telnet
+
+###########################################################################
+## dhclient support
+###########################################################################
+dhclient
+ifconfig
+[search=${QNX_TARGET}/sbin perms=a+x] /sbin/dhclient-script=dhclient-script
+[search=${QNX_TARGET}/etc]/etc/dhclient.conf=dhclient.conf
+
+###########################################################################
+## REMOTE_DEBUG
+###########################################################################
+devc-pty
+qconn
+/usr/bin/pdebug=pdebug
+
+###########################################################################
+## Network services (telnet) support
+##########################################################################
+[type=link] /var/log=/tmp
+[type=link] /var/run=/tmp
+[type=link] /var/lock=/tmp
+
+/etc/esh = {
+}
+
+devc-pty
+
+/etc/hosts=${QNX_TARGET}/etc/hosts
+/etc/services=${QNX_TARGET}/etc/services
+
+/etc/inetd.conf = {
+ftp        stream tcp nowait root  /usr/sbin/ftpd           in.ftpd -l
+telnet     stream tcp nowait root  /usr/sbin/telnetd        in.telnetd
+}
+
+/etc/ftpusers=${QNX_TARGET}/etc/ftpusers
+
+/etc/ftpd.conf = {
+/* Make things a+rw by default */
+umask all 0000
+}
+
+[uid=0 gid=0 perms=0644] /etc/passwd = {
+root:x:0:0:Superuser:/root:/bin/sh
+sshd:x:15:6:sshd:/var/chroot/sshd:/bin/false
+qnxuser:x:1000:1000:QNX User:/home/qnxuser:/bin/sh
+}
+
+# Enabled Username/Password: root/root, qnxuser/qnxuser
+[uid=0 gid=0 perms=0600] /etc/shadow = {
+root:@S@NKlWES1quMp1wmqugkUSnFEpPGn58kIs4wQOgDDNs06vimR+bbGPUKM+9P6jbFUzo3Rm+Qe5MS+17xKhwaeJEg==@Mjg5ZTJiMTM0YTRjYTE2ZGFjMDdhZTFlY2NlMDVmNmE=:1468494669:0:0
+sshd:*:1231323780:0:0
+qnxuser:@S@HZERXjgixvb3157FFeraShhvTVw+10ccUtVUVZbi0fUwpzlzBZFw5gHiFd1XHKit8D39Whe749XAY8fV4P5ANQ==@Y2ZlOTg3M2RhNTM4Y2M2ODY0OWZhODdiNDRkMmU5Nzg=:1468488235:0:0
+}
+
+[uid=0 gid=0 perms=0644] /etc/group = {
+root:x:0:root
+sshd:x:6:
+qnxuser:x:qnxuser
+}
+
+###########################################################################
+## PAM configurations addon build file
+###########################################################################
+[uid=0 gid=0 perms=4755] /bin/login=login
+[uid=0 gid=0 perms=4755] /bin/passwd=passwd
+[uid=0 gid=0 perms=4755] /bin/su=su
+[uid=0 gid=0 perms=0755] /usr/sbin/sshd=sshd
+[uid=0 gid=0 perms=0755] /usr/sbin/ftpd=ftpd
+[uid=0 gid=0 perms=0755] /usr/sbin/inetd=inetd
+[uid=0 gid=0 perms=0755] /usr/sbin/telnetd=telnetd
+
+[uid=0 gid=0 type=dir dperms=0755] /usr
+[uid=0 gid=0 type=dir dperms=0755] /usr/lib
+[uid=0 gid=0 type=dir dperms=0755] /etc
+[uid=0 gid=0 type=dir dperms=0755] /etc/pam.d
+[uid=0 gid=0 perms=0644] /etc/pam.d/login=${QNX_TARGET}/etc/pam.d/login
+[uid=0 gid=0 perms=0644] /etc/pam.d/on=${QNX_TARGET}/etc/pam.d/on
+[uid=0 gid=0 perms=0644] /etc/pam.d/passwd=${QNX_TARGET}/etc/pam.d/passwd
+[uid=0 gid=0 perms=0644] /etc/pam.d/su=${QNX_TARGET}/etc/pam.d/su
+[uid=0 gid=0 perms=0644] /etc/pam.d/ftpd=${QNX_TARGET}/etc/pam.d/ftpd
+
+[uid=0 gid=0 perms=0755] /usr/lib/pam_ftpusers.so=pam_ftpusers.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_rootok.so=pam_rootok.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_qnx.so=pam_qnx.so
+#[uid=0 gid=0 perms=0755] /usr/lib/pam_deny.so=pam_deny.so
+#[uid=0 gid=0 perms=0755] /usr/lib/pam_echo.so=pam_echo.so
+#[uid=0 gid=0 perms=0755] /usr/lib/pam_exec.so=pam_exec.so
+#[uid=0 gid=0 perms=0755] /usr/lib/pam_group.so=pam_group.so
+#[uid=0 gid=0 perms=0755] /usr/lib/pam_mac.so=pam_mac.so
+#[uid=0 gid=0 perms=0755] /usr/lib/pam_permit.so=pam_permit.so
+#[uid=0 gid=0 perms=0755] /usr/lib/pam_radius.so=pam_radius.so
+#[uid=0 gid=0 perms=0755] /usr/lib/pam_self.so=pam_self.so
+
+
+##########################################################################
+## Set environment and start the main shell
+###########################################################################
+# Create a profile so telnet sessions will get environment variables
+/etc/profile={
+export HOME=/
+export SYSNAME=nto
+export TERM=qansi
+export PATH=:/bin:/usr/bin:/sbin:/usr/sbin:/proc/boot:/opt/qt5/lib:/lib:/usr/lib/
+export LD_LIBRARY_PATH=:/lib:/usr/lib:/lib/dll:/lib/dll/pci:/proc/boot:/opt/qt5/lib:/lib/dll/mmedia/:/usr/Inc/lib/
+export PCI_HW_MODULE=/lib/dll/pci/pci_hw-iMX6-smart.so
+export PCI_BKWD_COMPAT_MODULE=/lib/dll/pci/pci_bkwd_compat.so
+export PCI_SLOG_MODULE=/lib/dll/pci/pci_slog2.so
+export PCI_DEBUG_MODULE=/lib/dll/pci/pci_debug2.so
+export PCI_BASE_VERBOSITY=0
+}
+
+###########################################################################
+## uncomment for Block driver
+###########################################################################
+devb-sdmmc-mx6
+fdisk
+mkdosfs
+
+###########################################################################
+## uncomment for SATA driver
+###########################################################################
+devb-ahci
+
+###########################################################################
+## uncomment for SST 25VF016B Flash driver
+## SPI Flash chip can be formatted like so: flashctl -p /dev/fs0p0 -e -f -m
+## After formatting a partition will appear in /fs0p0
+###########################################################################
+#devf-norspi-mx6_sabresmart-ecspi
+devf-norspi-mx6_sabresmart-ecspi.rom7420
+flashctl
+
+###########################################################################
+## uncomment for ECSPI
+###########################################################################
+spi-master
+
+###########################################################################
+## I2C driver
+###########################################################################
+i2c-imx
+
+###########################################################################
+## AUDIO
+###########################################################################
+io-audio
+wave
+waverec
+mix_ctl
+
+###########################################################################
+## uncomment for disk drivers (filesystems support)
+###########################################################################
+/sbin/fdisk=fdisk
+/sbin/mkdosfs=mkdosfs
+/sbin/mkqnx6fs=mkqnx6fs
+/sbin/chkdosfs=chkdosfs
+/sbin/chkqnx6fs=chkqnx6fs
+/usr/bin/fsysinfo=fsysinfo
+
+###########################################################################
+## uncomment for USB driver
+###########################################################################
+usb
+io-usb-otg
+
+ulink_ctrl
+
+###########################################################################
+## uncomment for USB Function drivers
+###########################################################################
+devu-umass_client-block
+devc-serusb_dcd
+
+###########################################################################
+## uncomment for WatchDog utility
+###########################################################################
+wdtkick
+
+###########################################################################
+## uncomment for RAM disk driver
+###########################################################################
+devb-ram
+
+#######################################################################
+## uncomment for RTC utility
+#######################################################################
+rtc
+
+###########################################################################
+## Manager for human-interface devices
+###########################################################################
+io-hid
+
+###########################################################################
+## Graphics support - apps
+###########################################################################
+
+/sbin/screen=screen
+/bin/screeninfo=screeninfo
+
+/usr/bin/calib-touch=calib-touch
+/usr/bin/egl-configs=egl-configs
+/usr/bin/gles2-gears=gles2-gears
+/usr/bin/sw-vsync=sw-vsync
+
+#for nfs mount scripts
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/nfsmount.sh=nfsmount.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/nfsmount-qt5.sh=nfsmount-qt5.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/mkinand-qnx.sh=mkinand-qnx.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/mkinand-uboot-qnx.sh=mkinand-uboot-qnx.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/mkspi-advboot-qnx.sh=mkspi-advboot-qnx.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/write_mac.sh=write_mac.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/fullload.sh=fullload.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/iperf=iperf
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/zcav=zcav
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/serial-loopback-test=serial-loopback-test
+
+#[search=../install/armle-v7/usr/bin perms=+x] /usr/bin/rdtouch = rdtouch
+#[search=../install/armle-v7/sbin perms=+x] /sbin/devi-microtouch = devi-microtouch
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/pwm = pwm
+
+
+###########################################################################
+## touch screen
+###########################################################################
+mtouch
+/etc/system/config/scaling.conf=../prebuilt/etc/system/config/scaling.conf
+/etc/system/config/mtouch.conf=../prebuilt/etc/system/config/mtouch.conf
+
+##########################################################################
+## Screen scripts
+###########################################################################
+[perms=0755] /scripts/screen.sh = {
+#!/bin/sh
+
+
+ # configure LCD brightness
+ /usr/bin/pwm -l 0
+
+uname=$(uname -m)
+case $uname in
+*"QuadPlus"*)
+    /sbin/screen -c /usr/lib/graphics/iMX6DQP/graphics.conf
+    ;;
+*"QuadorDual"*)
+    /sbin/screen -c /usr/lib/graphics/iMX6X/graphics.conf
+    ;;
+esac
+
+}
+
+###########################################################################
+## keyboard
+###########################################################################
+[search=${QNX_TARGET}/usr/share/keyboard]/usr/share/keyboard/en_US_101.kbd=en_US_101.kbd
+
+###########################################################################
+## Graphics base executables
+###########################################################################
+/bin/screencmd=screencmd
+/usr/bin/dpy-vsync=dpy-vsync
+/usr/bin/gles1-gears=gles1-gears
+/usr/bin/gles1-vsync=gles1-vsync
+/usr/bin/gles3-gears=gles3-gears
+/usr/bin/screen-gles2-tools=screen-gles2-tools
+/usr/bin/screenshot=screenshot
+/usr/bin/sharewin=sharewin
+/usr/bin/vg-tiger=vg-tiger
+/usr/bin/win-vsync=win-vsync
+
+###########################################################################
+## Font executables
+###########################################################################
+/usr/bin/font-freetype=font-freetype
+
+###########################################################################
+## Image Codecs
+###########################################################################
+[search=${QNX_TARGET}/etc/system/config]/etc/system/config/img.conf=img.conf
+
+###########################################################################
+## Video Capture executables
+###########################################################################
+/usr/bin/vcapture-demo=vcapture-demo
+
+###########################################################################
+## Board specific libraries
+###########################################################################
+/usr/lib/libcapture-board-imx6x-sabreSMART.so=libcapture-board-imx6x-sabreSMART.so
+
+###########################################################################
+## PCI support
+###########################################################################
+pci-server
+pci-tool
+rsrcdb_query
+[search=${QNX_TARGET}/etc/system/config/pci] /etc/system/config/pci/pcidatabase.com-tab_delimited.txt=pcidatabase.com-tab_delimited.txt
+
+###########################################################################
+## Set environment and start the main shell
+###########################################################################
+[perms=0744] .console.sh={
+echo setting env variables.
+
+export SYSNAME=nto
+export TERM=qansi
+export HOME=/
+
+#######################################################################
+## REMOTE_DEBUG (gdb or Momentics)
+##  - refer to the help documentation for the gdb, qconn and the IDE
+##    for more information on remote debugging
+##  - the commands shown require that NETWORK is enabled too
+#######################################################################
+devc-pty
+#waitfor /dev/ptyp0 4
+#waitfor /dev/socket 4
+PATH=$PATH:/usr/bin qconn port=8000
+
+ksh -l
+}
+
+###########################################################################
+## general commands
+###########################################################################
+cp
+ls
+cat
+ksh
+pipe
+pidin
+uname
+slogger2
+slog2info
+slay
+mount
+umount
+use
+which
+more
+less
+date
+shutdown
+devb-umass
+chmod
+ln
+rm
+mv
+sleep
+random
+dd
+top
+mkdir
+grep
+env
+ldd
+hostname
+events
+#weilun
+awk
+sync
+#weilun
+
+###########################################################################
+## END OF BUILD SCRIPT
+###########################################################################
+
+###########################################################################
+##
+## INTERRUPT MAP (i.mx6DQ)
+##
+###########################################################################
+##
+##
+## vector: 0 - 31
+## device: reserved
+##
+## vector 32 - 158
+## device: same IRQs as defined in i.MX6Q TRM
+##
+## vector 159
+## device: reserved
+##
+## GPIO interrupts are cascaded.  Individual GPIO IRQs are defined below
+## vector 160 - 175
+## device: GPIO1[1 - 15]
+##
+## vector 176 - 191
+## device: GPIO1[16 - 31]
+##
+## vector 192 - 207
+## device: GPIO2[1 - 15]
+##
+## vector 208 - 223
+## device: GPIO2[16 - 31]
+##
+## vector 224 - 239
+## device: GPIO3[1 - 15]
+##
+## vector 240 - 255
+## device: GPIO3[16 - 31]
+##
+## vector 256 - 271
+## device: GPIO4[1 - 15]
+##
+## vector 272 - 287
+## device: GPIO4[16 - 31]
+##
+## vector 288 - 303
+## device: GPIO5[1 - 15]
+##
+## vector 305 - 319
+## device: GPIO5[16 - 31]
+##
+## vector 320 - 335
+## device: GPIO6[1 - 15]
+##
+## vector 336 - 351
+## device: GPIO6[16 - 31]
+##
+## vector 352 - 367
+## device: GPIO7[1 - 15]
+##
+## vector 368 - 383
+## device: GPIO7[16 - 31]
+##
+###########################################################################
